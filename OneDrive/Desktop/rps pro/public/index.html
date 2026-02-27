@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Purna's game</title>
+<style>
+body{
+  background:#111;
+  color:white;
+  font-family:Arial;
+  text-align:center;
+}
+h1{
+  color:red;
+  font-size:45px;
+  text-shadow:0 0 20px red;
+  margin-top:40px;
+}
+button{
+  padding:8px 15px;
+  margin:4px;
+  font-size:14px;
+  cursor:pointer;
+  border:none;
+  border-radius:6px;
+}
+input, select{
+  padding:8px;
+  margin:5px;
+}
+.hidden{ display:none; }
+#leaderboard{
+  margin-top:20px;
+  background:#222;
+  padding:15px;
+  border-radius:10px;
+  width:400px;
+  margin-left:auto;
+  margin-right:auto;
+}
+</style>
+</head>
+
+<body>
+
+<h1>Purna's game'o rock, paper'n scissors</h1>
+
+<!-- AUTH -->
+<div id="auth">
+  <h2>Account</h2>
+  <button onclick="showRegister()">Create Account</button>
+  <button onclick="showLogin()">Log In</button>
+
+  <div id="formArea" class="hidden">
+    <input id="username" placeholder="Username"><br>
+    <input id="password" type="password" placeholder="Password"><br>
+    <button id="actionBtn"></button>
+    <p id="authMsg"></p>
+  </div>
+</div>
+
+<!-- MENU -->
+<div id="menu" class="hidden">
+  <h2 id="welcome"></h2>
+
+  <button onclick="startBot()">🤖 VS Bot</button>
+  <button onclick="showMultiSelect()">🎮 Multiplayer</button>
+  <button onclick="showLeaderboard()">🏆 Leaderboard</button>
+
+  <br><br>
+  <button onclick="logout()" style="background:red;">Logout</button>
+
+  <div id="multiSelect" class="hidden">
+    <h3>Select Opponent</h3>
+    <select id="opponentSelect"></select>
+    <button onclick="startMulti()">Start</button>
+  </div>
+
+  <div id="leaderboard" class="hidden"></div>
+</div>
+
+<!-- GAME -->
+<div id="game" class="hidden">
+  <h2 id="modeTitle"></h2>
+
+  <button onclick="choose('Rock')">🪨 Rock</button>
+  <button onclick="choose('Paper')">📄 Paper</button>
+  <button onclick="choose('Scissors')">✂ Scissors</button>
+
+  <br><br>
+  <button id="revealBtn" onclick="decide()" style="display:none;">Reveal</button>
+  <button id="resetBtn" onclick="resetRound()" style="display:none;">Reset Round</button>
+  <button onclick="exitGame()">Exit</button>
+
+  <p id="result"></p>
+</div>
+
+<script>
+
+let accounts = JSON.parse(localStorage.getItem("accounts")) || {};
+let currentUser = localStorage.getItem("loggedUser") || null;
+let mode="";
+let opponent=null;
+let p1Choice=null;
+let p2Choice=null;
+
+/* AUTO LOGIN */
+if(currentUser && accounts[currentUser] && !accounts[currentUser].banned){
+  showMenu();
+}
+
+/* AUTH FORMS */
+function showRegister(){
+  formArea.classList.remove("hidden");
+  actionBtn.innerText="Register";
+  actionBtn.onclick=register;
+}
+function showLogin(){
+  formArea.classList.remove("hidden");
+  actionBtn.innerText="Login";
+  actionBtn.onclick=login;
+}
+
+/* REGISTER */
+function register(){
+  let u=username.value.trim();
+  let p=password.value.trim();
+
+  if(u.length<3){
+    authMsg.innerText="Username min 3 chars";
+    return;
+  }
+  if(p.length<4){
+    authMsg.innerText="Password min 4 chars";
+    return;
+  }
+  if(accounts[u]){
+    authMsg.innerText="Username taken!";
+    return;
+  }
+
+  accounts[u]={password:p,wpoints:0,level:0,banned:false};
+  localStorage.setItem("accounts",JSON.stringify(accounts));
+  authMsg.innerText="Account Created!";
+}
+
+/* LOGIN */
+function login(){
+  let u=username.value.trim();
+  let p=password.value.trim();
+
+  if(!accounts[u] || accounts[u].password!==p){
+    authMsg.innerText="Wrong credentials!";
+    return;
+  }
+  if(accounts[u].banned){
+    authMsg.innerText="Account BANNED!";
+    return;
+  }
+
+  currentUser=u;
+  localStorage.setItem("loggedUser",u);
+  showMenu();
+}
+
+/* MENU */
+function showMenu(){
+  auth.classList.add("hidden");
+  game.classList.add("hidden");
+  menu.classList.remove("hidden");
+  multiSelect.classList.add("hidden");
+
+  let acc=accounts[currentUser];
+  let crown=currentUser==="Purna"?" 👑":"";
+
+  welcome.innerText=
+  "Welcome "+currentUser+crown+
+  " | Level "+acc.level+
+  " | W "+acc.wpoints;
+
+  leaderboard.classList.add("hidden");
+}
+
+/* LOGOUT */
+function logout(){
+  localStorage.removeItem("loggedUser");
+  currentUser=null;
+  menu.classList.add("hidden");
+  auth.classList.remove("hidden");
+}
+
+/* BOT */
+function startBot(){
+  if(accounts[currentUser].level>1){
+    alert("Bot only till Level 1");
+    return;
+  }
+  mode="bot";
+  startGame();
+}
+
+/* MULTI SELECT */
+function showMultiSelect(){
+  multiSelect.classList.remove("hidden");
+  opponentSelect.innerHTML="";
+
+  Object.keys(accounts).forEach(name=>{
+    if(name!==currentUser && !accounts[name].banned){
+      let option=document.createElement("option");
+      option.value=name;
+      option.text=name;
+      opponentSelect.appendChild(option);
+    }
+  });
+}
+
+function startMulti(){
+  opponent=opponentSelect.value;
+  if(!opponent){
+    alert("Select opponent!");
+    return;
+  }
+  mode="multi";
+  startGame();
+}
+
+/* START GAME */
+function startGame(){
+  menu.classList.add("hidden");
+  game.classList.remove("hidden");
+
+  modeTitle.innerText=
+  mode==="bot"?"VS BOT":"VS "+opponent;
+
+  resetRound();
+}
+
+/* EXIT */
+function exitGame(){
+  resetRound();
+  showMenu();
+}
+
+/* CHOOSE */
+function choose(choice){
+  if(mode==="bot"){
+    p1Choice=choice;
+    p2Choice=randomChoice();
+    revealBtn.style.display="inline-block";
+  }else{
+    if(!p1Choice){
+      p1Choice=choice;
+      alert(opponent+"'s turn");
+    }else{
+      p2Choice=choice;
+      revealBtn.style.display="inline-block";
+    }
+  }
+}
+
+function randomChoice(){
+  let arr=["Rock","Paper","Scissors"];
+  return arr[Math.floor(Math.random()*3)];
+}
+
+/* DECIDE */
+function decide(){
+  let acc1=accounts[currentUser];
+  let acc2=accounts[opponent];
+  let resultText="";
+
+  if(p1Choice===p2Choice){
+    resultText="Draw!";
+  }
+  else if(
+    (p1Choice==="Rock"&&p2Choice==="Scissors")||
+    (p1Choice==="Paper"&&p2Choice==="Rock")||
+    (p1Choice==="Scissors"&&p2Choice==="Paper")
+  ){
+    acc1.wpoints+=2;
+    if(mode==="multi") acc2.wpoints-=2;
+    resultText="YOU WIN 😎";
+  }
+  else{
+    acc1.wpoints-=2;
+    if(acc1.wpoints<0) acc1.wpoints=0;
+    if(mode==="multi") acc2.wpoints+=2;
+    resultText="YOU LOST 💀";
+  }
+
+  acc1.level=Math.floor(acc1.wpoints/10);
+  if(mode==="multi"){
+    if(acc2.wpoints<0) acc2.wpoints=0;
+    acc2.level=Math.floor(acc2.wpoints/10);
+  }
+
+  localStorage.setItem("accounts",JSON.stringify(accounts));
+
+  result.innerText=
+  currentUser+": "+p1Choice+
+  " | "+(mode==="bot"?"Bot":opponent)+
+  ": "+p2Choice+
+  " | "+resultText;
+
+  revealBtn.style.display="none";
+  resetBtn.style.display="inline-block";
+}
+
+/* RESET */
+function resetRound(){
+  p1Choice=null;
+  p2Choice=null;
+  result.innerText="";
+  revealBtn.style.display="none";
+  resetBtn.style.display="none";
+}
+
+/* LEADERBOARD + BAN */
+function showLeaderboard(){
+  leaderboard.classList.remove("hidden");
+
+  let sorted=Object.keys(accounts).sort((a,b)=>
+    accounts[b].wpoints - accounts[a].wpoints
+  );
+
+  let html="<h3>🏆 Leaderboard</h3>";
+
+  sorted.forEach((name,i)=>{
+    let crown=name==="Purna"?" 👑":"";
+    let banButton="";
+
+    if(currentUser==="Purna" && name!=="Purna"){
+      banButton=` <button onclick="banUser('${name}')">BAN</button>`;
+    }
+
+    html +=
+    (i+1)+". "+name+crown+
+    " | Lvl "+accounts[name].level+
+    " | W "+accounts[name].wpoints+
+    banButton+"<br>";
+  });
+
+  leaderboard.innerHTML=html;
+}
+
+function banUser(name){
+  if(name==="Purna") return;
+  accounts[name].banned=true;
+  localStorage.setItem("accounts",JSON.stringify(accounts));
+  showLeaderboard();
+}
+
+</script>
+</body>
+</html>
